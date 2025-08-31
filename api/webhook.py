@@ -343,11 +343,14 @@ def save_transaction(user_id, amount, category, description=None):
 # === ФУНКЦИИ TELEGRAM БОТА ===
 def get_bot_token():
     """Получение токена бота из переменных окружения"""
+    # Пробуем получить токен из переменных окружения
     token = os.getenv('BOT_TOKEN')
+    
+    # Если токен не найден, используем жестко заданный токен
     if not token:
-        # Заглушка для тестирования в Vercel (должна быть заменена на фактический токен)
-        logger.error("BOT_TOKEN не найден в переменных окружения")
-        raise ValueError("BOT_TOKEN не найден в переменных окружения")
+        logger.warning("Токен бота не найден в переменных окружения, используем заданный токен")
+        token = "8129552663:AAGgaGHk0rOJ2R6aJ1rEdgvsiZxMBP6--cs"
+    
     return token
 
 def get_categories_keyboard():

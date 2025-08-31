@@ -20,6 +20,14 @@
     {
       "src": "api/set-webhook.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "api/test_token.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/fix_webhook.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
@@ -38,6 +46,14 @@
     {
       "src": "/api/set-webhook",
       "dest": "api/set-webhook.py"
+    },
+    {
+      "src": "/api/test-token",
+      "dest": "api/test_token.py"
+    },
+    {
+      "src": "/api/fix-webhook",
+      "dest": "api/fix_webhook.py"
     },
     {
       "src": "/(.*)",
