@@ -4,6 +4,7 @@ import os
 import asyncio
 import logging
 import sqlite3
+import traceback
 from datetime import datetime
 import re
 from decimal import Decimal
@@ -12,13 +13,16 @@ from typing import Dict, Optional, Tuple, List, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
 # Глобальные переменные
 telegram_app = None
 db_connection = None
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Категории расходов
 CATEGORIES = [
@@ -341,6 +345,8 @@ def get_bot_token():
     """Получение токена бота из переменных окружения"""
     token = os.getenv('BOT_TOKEN')
     if not token:
+        # Заглушка для тестирования в Vercel (должна быть заменена на фактический токен)
+        logger.error("BOT_TOKEN не найден в переменных окружения")
         raise ValueError("BOT_TOKEN не найден в переменных окружения")
     return token
 
@@ -361,18 +367,24 @@ async def init_telegram_app():
     """Инициализация Telegram Application"""
     global telegram_app
     
-    if telegram_app is None:
-        token = get_bot_token()
-        telegram_app = Application.builder().token(token).build()
-        
-        # Добавляем базовые хендлеры
-        telegram_app.add_handler(CommandHandler("start", handle_start))
-        telegram_app.add_handler(CommandHandler("stats", handle_stats))
-        telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        telegram_app.add_handler(CallbackQueryHandler(handle_callback))
-        
-        await telegram_app.initialize()
-        logger.info("Telegram Application успешно инициализирована")
+    try:
+        if telegram_app is None:
+            token = get_bot_token()
+            logger.info(f"Получен токен бота: {token[:5]}...")
+            telegram_app = Application.builder().token(token).build()
+            
+            # Добавляем базовые хендлеры
+            telegram_app.add_handler(CommandHandler("start", handle_start))
+            telegram_app.add_handler(CommandHandler("stats", handle_stats))
+            telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+            telegram_app.add_handler(CallbackQueryHandler(handle_callback))
+            
+            await telegram_app.initialize()
+            logger.info("Telegram Application успешно инициализирована")
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации Telegram Application: {e}")
+        logger.error(traceback.format_exc())
+        raise e
         
     return telegram_app
 
@@ -385,6 +397,12 @@ async def handle_start(update, context):
         
         # Сохраняем пользователя в БД
         save_user(user_id, user.first_name, user.username)
+        
+        # Прямой ответ для быстрого тестирования
+        try:
+            await update.message.reply_text("Привет! Я работаю. Идет загрузка меню...")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке быстрого ответа: {e}")
         
         welcome_text = f"""🚀 Добро пожаловать в финансового бота!
 
@@ -402,6 +420,13 @@ async def handle_start(update, context):
         logger.info(f"Отправлено приветственное сообщение пользователю {user_id}")
     except Exception as e:
         logger.error(f"Ошибка в handle_start: {e}")
+        logger.error(traceback.format_exc())
+        # Попытка отправить сообщение об ошибке
+        try:
+            if update and update.message:
+                await update.message.reply_text("Произошла ошибка при обработке команды. Попробуйте еще раз.")
+        except:
+            pass
 
 async def handle_stats(update, context):
     """Обработка команды /stats для статистики"""
@@ -521,19 +546,28 @@ class handler(BaseHTTPRequestHandler):
             logger.info(f"Получен POST запрос с длиной контента: {content_length}")
             
             # Обработка данных от Telegram
-            update_dict = json.loads(post_data.decode('utf-8'))
-            logger.info(f"Получены данные от Telegram: {json.dumps(update_dict)[:200]}...")
-            
-            update = Update.de_json(update_dict, None)
-            
-            # Инициализация и обработка обновления
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            logger.info("Инициализация Telegram Application")
-            app_instance = loop.run_until_complete(init_telegram_app())
-            logger.info("Обработка обновления Telegram")
-            loop.run_until_complete(app_instance.process_update(update))
-            logger.info("Обработка обновления Telegram завершена")
+            try:
+                update_dict = json.loads(post_data.decode('utf-8'))
+                logger.info(f"Получены данные от Telegram: {json.dumps(update_dict)[:200]}...")
+                
+                # Проверка наличия команды /start
+                if "message" in update_dict and "text" in update_dict["message"] and update_dict["message"]["text"] == "/start":
+                    logger.info("Обнаружена команда /start")
+                
+                update = Update.de_json(update_dict, None)
+                
+                # Инициализация и обработка обновления
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                logger.info("Инициализация Telegram Application")
+                app_instance = loop.run_until_complete(init_telegram_app())
+                logger.info("Обработка обновления Telegram")
+                loop.run_until_complete(app_instance.process_update(update))
+                logger.info("Обработка обновления Telegram завершена")
+            except Exception as e:
+                logger.error(f"Ошибка при обработке обновления Telegram: {e}")
+                logger.error(traceback.format_exc())
+                raise e
             
             # Отправляем успешный ответ
             self.send_response(200)
@@ -557,9 +591,18 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
-        self.wfile.write(json.dumps({
+        
+        # Информация о версии и состоянии
+        response_data = {
             'status': 'active',
             'message': 'Telegram webhook is running',
             'timestamp': datetime.now().isoformat(),
-            'features': '4-level transaction parsing system'
-        }).encode())
+            'features': '4-level transaction parsing system',
+            'version': '1.1',
+            'last_update': '2025-08-31',
+            'env_variables': {
+                'BOT_TOKEN': 'Available' if os.getenv('BOT_TOKEN') else 'Missing',
+            }
+        }
+        
+        self.wfile.write(json.dumps(response_data).encode())
