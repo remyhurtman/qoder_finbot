@@ -1,0 +1,2 @@
+# Minimal requirements for Vercel deployment
+# Empty for the test project to reduce bundle size
