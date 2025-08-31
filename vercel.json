@@ -12,6 +12,14 @@
     {
       "src": "api/health.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "api/webhook.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/set-webhook.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
@@ -22,6 +30,14 @@
     {
       "src": "/health",
       "dest": "api/health.py"
+    },
+    {
+      "src": "/api/webhook",
+      "dest": "api/webhook.py"
+    },
+    {
+      "src": "/api/set-webhook",
+      "dest": "api/set-webhook.py"
     },
     {
       "src": "/(.*)",
